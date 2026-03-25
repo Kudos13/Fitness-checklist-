@@ -1,270 +1,163 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Workout Tracker</title>
-
-<link rel="manifest" href="manifest.json">
-
-<style>
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0f172a;
-  color: white;
-}
-
-.container {
-  max-width: 520px;
-  margin: auto;
-  padding: 20px;
-}
-
-h1 { text-align: center; }
-
-select, button {
-  width: 100%;
-  padding: 12px;
-  border-radius: 10px;
-  border: none;
-  margin: 8px 0;
-  font-size: 16px;
-}
-
-.card {
-  background: #1e293b;
-  padding: 12px;
-  border-radius: 10px;
-  margin-bottom: 10px;
-}
-
-.card.completed {
-  opacity: 0.5;
-  text-decoration: line-through;
-}
-
-.timer {
-  text-align: center;
-  font-size: 22px;
-  margin: 10px 0;
-}
-
-details {
-  font-size: 14px;
-  opacity: 0.85;
-}
-</style>
-</head>
-
-<body>
-<div class="container">
-
-<h1>🏋️ Workout Tracker</h1>
-
-<select id="selector"></select>
-
-<div class="timer" id="timer">⏱ 60</div>
-<button onclick="startTimer()">Start Rest Timer</button>
-<button onclick="resetTimer()">Reset Timer</button>
-
-<div id="list"></div>
-
-<div id="progress"></div>
-
-<button onclick="resetDay()">Reset Day</button>
-
-</div>
-
 <script>
-const plan = {
+/* ============================================================
+   QUESTLIST — UPDATED (move + bottom add)
+   ============================================================ */
 
-"Week 1 - Upper": [
-{n:"Push-Ups", r:"10x3", d:"Keep body straight."},
-{n:"Pull-Ups", r:"5x3", d:"Pull chin over bar."},
-{n:"Rows", r:"10x3", d:"Pull to hip."},
-{n:"Plank", r:"30 sec x3", t:30, d:"Hold straight body."},
-{n:"Wall Sit", r:"30 sec x3", t:30, d:"Back flat on wall."}
-],
+var RANKS = [
+  { name:'Bronze Squire', icon:'🥉', xp:0, sub:'RANK I' },
+  { name:'Iron Warrior', icon:'⚔️', xp:150, sub:'RANK II' },
+  { name:'Silver Knight', icon:'🛡️', xp:400, sub:'RANK III' },
+  { name:'Gold Guardian', icon:'🥇', xp:800, sub:'RANK IV' },
+  { name:'Platinum Paladin', icon:'💫', xp:1500, sub:'RANK V' },
+  { name:'Diamond Legend', icon:'💎', xp:2500, sub:'RANK VI' },
+  { name:'Mythic Champion', icon:'🔥', xp:4000, sub:'RANK VII' },
+  { name:'Eternal Sovereign', icon:'👑', xp:6000, sub:'RANK VIII' }
+];
 
-"Week 1 - Lower": [
-{n:"Goblet Squat", r:"12x3", d:"Chest up."},
-{n:"RDL", r:"10x3", d:"Hinge hips."},
-{n:"Calf Raises", r:"15x3", d:"Slow reps."},
-{n:"Wall Sit", r:"35 sec x3", t:35, d:"Hold position."}
-],
+var SWATCHES = ['#6070ff','#a855f7','#10b981','#f43f5e','#f97316','#fbbf24','#06b6d4','#ec4899'];
 
-"Week 2 - Upper": [
-{n:"Push-Ups", r:"12x3"},
-{n:"Pull-Ups", r:"6x3"},
-{n:"Rows", r:"12x3"},
-{n:"Plank", r:"40 sec x3", t:40},
-{n:"Wall Sit", r:"40 sec x3", t:40}
-],
+var pickedColor = SWATCHES[0];
+var currentFilter = 'active';
+var currentGrp = 'all';
 
-"Week 2 - Lower": [
-{n:"Goblet Squat", r:"15x3"},
-{n:"RDL", r:"12x3"},
-{n:"Calf Raises", r:"18x3"},
-{n:"Wall Sit", r:"45 sec x3", t:45}
-],
+function defaultState() {
+  return { username:'', tasks:[], groups:[], xp:0, totalXP:0, done:0, streak:0, lastDate:null };
+}
 
-"Week 3 - Upper": [
-{n:"Push-Ups", r:"15x3"},
-{n:"Pull-Ups", r:"7x3"},
-{n:"Rows", r:"12x3 heavier"},
-{n:"Plank", r:"45 sec x3", t:45},
-{n:"Wall Sit", r:"50 sec x3", t:50}
-],
+var S = JSON.parse(localStorage.getItem('qlv5')) || defaultState();
+function persist(){ localStorage.setItem('qlv5', JSON.stringify(S)); }
 
-"Week 3 - Lower": [
-{n:"Goblet Squat", r:"15x3 heavier"},
-{n:"RDL", r:"12x3"},
-{n:"Calf Raises", r:"20x3"},
-{n:"Wall Sit", r:"55 sec x3", t:55}
-],
+function get(id){ return document.getElementById(id); }
 
-"Week 4 - Upper": [
-{n:"Push-Ups", r:"18x3"},
-{n:"Pull-Ups", r:"8x3"},
-{n:"Rows", r:"15x3"},
-{n:"Plank", r:"60 sec x3", t:60},
-{n:"Wall Sit", r:"60 sec x3", t:60}
-],
+/* =========================
+   ADD TASK (NOW TO BOTTOM)
+   ========================= */
+function doAddTask() {
+  var txt = get('taskText').value.trim();
+  if (!txt) return;
 
-"Week 4 - Lower": [
-{n:"Goblet Squat", r:"18x3"},
-{n:"RDL", r:"15x3"},
-{n:"Calf Raises", r:"20x3"},
-{n:"Wall Sit", r:"60 sec x3", t:60}
-]
+  var xp  = parseInt(get('xpPick').value,10) || 50;
+  var grp = get('grpPick').value || null;
+  var due = get('duePick').value || null;
 
-};
-
-const selector = document.getElementById("selector");
-const list = document.getElementById("list");
-const progress = document.getElementById("progress");
-const timerDisplay = document.getElementById("timer");
-
-let timer = 60;
-let interval;
-
-// dropdown
-Object.keys(plan).forEach(day=>{
-  let o=document.createElement("option");
-  o.value=day;
-  o.textContent=day;
-  selector.appendChild(o);
-});
-
-function loadDay(day){
-  list.innerHTML="";
-
-  plan[day].forEach((ex,i)=>{
-    let card=document.createElement("div");
-    card.className="card";
-
-    let check=document.createElement("input");
-    check.type="checkbox";
-
-    if(localStorage.getItem(day+i)==="true"){
-      check.checked=true;
-      card.classList.add("completed");
-    }
-
-    check.onchange=()=>{
-      localStorage.setItem(day+i,check.checked);
-      card.classList.toggle("completed");
-      update(day);
-    };
-
-    let title=document.createElement("div");
-    title.textContent=`${ex.n} (${ex.r})`;
-
-    // timer button for timed exercises
-    if(ex.t){
-      let btn=document.createElement("button");
-      btn.textContent="Start Exercise Timer";
-      btn.onclick=()=>startExerciseTimer(ex.t);
-      card.appendChild(btn);
-    }
-
-    let details=document.createElement("details");
-    let sum=document.createElement("summary");
-    sum.textContent="How to do it";
-    let desc=document.createElement("div");
-    desc.textContent=ex.d || "Perform with good form.";
-
-    details.appendChild(sum);
-    details.appendChild(desc);
-
-    card.appendChild(check);
-    card.appendChild(title);
-    card.appendChild(details);
-
-    list.appendChild(card);
+  // ✅ push instead of unshift
+  S.tasks.push({
+    id: String(Date.now()),
+    text: txt,
+    xp: xp,
+    done: false,
+    groupId: grp,
+    due: due
   });
 
-  update(day);
+  get('taskText').value = '';
+  get('duePick').value = '';
+
+  persist();
+  drawTasks();
 }
 
-function update(day){
-  let done=0;
-  let total=plan[day].length;
+/* =========================
+   MOVE TASK
+   ========================= */
+function moveTask(id, dir){
+  var i = S.tasks.findIndex(t => t.id === id);
+  if(i === -1) return;
 
-  plan[day].forEach((_,i)=>{
-    if(localStorage.getItem(day+i)==="true") done++;
+  var ni = i + dir;
+  if(ni < 0 || ni >= S.tasks.length) return;
+
+  var temp = S.tasks[i];
+  S.tasks[i] = S.tasks[ni];
+  S.tasks[ni] = temp;
+
+  persist();
+  drawTasks();
+}
+
+/* =========================
+   DRAW TASKS (NO SORT)
+   ========================= */
+function drawTasks(){
+  var tasks = S.tasks.slice();
+
+  if(currentFilter==='active') tasks = tasks.filter(t=>!t.done);
+  if(currentFilter==='done') tasks = tasks.filter(t=>t.done);
+
+  if(!tasks.length){
+    get('taskList').innerHTML = '<div class="empty-state">No quests</div>';
+    return;
+  }
+
+  var html='';
+
+  tasks.forEach(function(t){
+
+    html += `
+    <div class="task" data-id="${t.id}">
+      <div class="check">${t.done?'✓':''}</div>
+
+      <div class="task-body">
+        <div class="task-text">${t.text}</div>
+        <div class="task-meta">
+          <span class="xp-tag">+${t.xp} XP</span>
+        </div>
+      </div>
+
+      <button class="del-btn" data-up="${t.id}">⬆️</button>
+      <button class="del-btn" data-down="${t.id}">⬇️</button>
+      <button class="del-btn" data-del="${t.id}">🗑</button>
+    </div>
+    `;
   });
 
-  progress.textContent=`Progress: ${done}/${total}`;
-}
+  get('taskList').innerHTML = html;
 
-// REST TIMER
-function startTimer(){
-  clearInterval(interval);
-  interval=setInterval(()=>{
-    timer--;
-    timerDisplay.textContent="⏱ "+timer;
-    if(timer<=0){
-      clearInterval(interval);
-      alert("Rest done!");
+  /* =========================
+     CLICK HANDLER
+     ========================= */
+  get('taskList').onclick = function(e){
+
+    var up = e.target.closest('[data-up]');
+    if(up){
+      e.stopPropagation();
+      moveTask(up.dataset.up,-1);
+      return;
     }
-  },1000);
-}
 
-function resetTimer(){
-  clearInterval(interval);
-  timer=60;
-  timerDisplay.textContent="⏱ 60";
-}
-
-// EXERCISE TIMER
-function startExerciseTimer(seconds){
-  clearInterval(interval);
-  timer=seconds;
-  timerDisplay.textContent="⏱ "+timer;
-
-  interval=setInterval(()=>{
-    timer--;
-    timerDisplay.textContent="⏱ "+timer;
-    if(timer<=0){
-      clearInterval(interval);
-      alert("Done!");
+    var down = e.target.closest('[data-down]');
+    if(down){
+      e.stopPropagation();
+      moveTask(down.dataset.down,1);
+      return;
     }
-  },1000);
+
+    var del = e.target.closest('[data-del]');
+    if(del){
+      e.stopPropagation();
+      S.tasks = S.tasks.filter(t=>t.id !== del.dataset.del);
+      persist();
+      drawTasks();
+      return;
+    }
+
+    var row = e.target.closest('[data-id]');
+    if(row){
+      var t = S.tasks.find(x=>x.id===row.dataset.id);
+      if(t){
+        t.done = !t.done;
+        persist();
+        drawTasks();
+      }
+    }
+  };
 }
 
-function resetDay(){
-  let day=selector.value;
-  plan[day].forEach((_,i)=>localStorage.removeItem(day+i));
-  loadDay(day);
-}
+/* =========================
+   INIT
+   ========================= */
+get('addTaskBtn').onclick = doAddTask;
+get('taskText').onkeydown = e => { if(e.key==='Enter') doAddTask(); };
 
-selector.onchange=()=>loadDay(selector.value);
-
-loadDay(Object.keys(plan)[0]);
+drawTasks();
 </script>
-
-</body>
-</html>
